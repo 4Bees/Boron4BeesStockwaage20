@@ -3,6 +3,7 @@
  * Description: Boron4BeesStockwaage20 - API-Key und Scalefactor werden über die serielle Schnittstelle konfiguriert und im EEPROM gespeichert.
  * Author: Dieter Metzler
  * Date: 08.09.2020
+ * Updated: 28.01.2021
  */
 
 
