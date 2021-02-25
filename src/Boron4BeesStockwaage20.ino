@@ -74,11 +74,11 @@ DHT dht(DHTPIN, DHTTYPE);
 
 
 float temperature = 0;
-int const num_temperature_readings = 20;
+int const num_temperature_readings = 10;
 float temperature_readings[num_temperature_readings];
 
 float humidity = 0;
-int const num_humidity_readings = 20;
+int const num_humidity_readings = 10;
 float humidity_readings[num_humidity_readings];
 
 
@@ -91,7 +91,7 @@ float minimumSoC = 30.0;
 String stringSOC = "";
 
 
-long sleepTimeSecs = 3600;
+long sleepTimeSecs = 3540;
 long sleepADay = 86400;
 
 PMIC pmic; //Initalize the PMIC class so you can call the Power Management functions below.
@@ -118,32 +118,26 @@ void setup() {
   // Settings are persisted, you normally wouldn't do this on every startup.
 
   setupSerial();
-  PMICSetup(); 
+  wait5Seconds();
   setupScale();
 }
 
 void loop() {
-  
-  
-      wait5Seconds();
-      
-      readSoC();
-      veryLowBattery();
-      batteryCheck();
 
-      /*
-      minute = Time.minute();
-      Serial.println("Minute: " + String(minute));
-      int waitTime = (60-minute)*60;
-      Serial.println("waitTime: " + String(waitTime)); 
-      */
+      scale.power_up();
+      dht.begin();
+      PMICSetup(); 
+      wait5Seconds();    
+      readSoC();
+      //veryLowBattery();
+      //batteryCheck();
+      readWeight();
+      readDHT();
 
       connectToCellular();
       connectToParticle();
-      readWeight();
-      readDHT();
-      sendValuesToCloud();
       
+      sendValuesToCloud();
       System.sleep( {}, {}, sleepTimeSecs); 
       
     
@@ -358,9 +352,7 @@ void sendValuesToCloud()
 
 
 void readWeight() {
-
-  scale.power_up();
-
+  
   //float calibrationFactor = 0;
   EEPROM.get(scalefactorEepromAdress, scalefactor);
   Serial.println("Scalefactor: " + String(scalefactor));
@@ -399,7 +391,7 @@ void readDHT() {
   for (int i = 0; i < num_temperature_readings; i++) {
     temperature_readings[i] = dht.getTempCelcius();;  // fill the array with instantaneous readings from the scale
     Serial.println("Temperature: " + String(temperature_readings[i]));
-    delay(250);
+    delay(1000);
   }
   delay(1000);
   
@@ -410,7 +402,7 @@ void readDHT() {
   for (int i = 0; i < num_humidity_readings; i++) {
     humidity_readings[i] = dht.getHumidity();  // fill the array with instantaneous readings from the scale
     Serial.println("Humidity: " + String(humidity_readings[i]));
-    delay(250);
+    delay(1000);
   }
   delay(1000);
   
@@ -470,7 +462,7 @@ void PMICSetup(){
 
 
 void readSoC() {
-  fuel.quickStart();
+  //fuel.quickStart();
   delay(500);
   for (int i = 0; i < num_soc_readings; i++) {
   readings[i] = fuel.getSoC(); // fill the array with instantaneous readings from the scale
@@ -488,7 +480,8 @@ void veryLowBattery() {
   if (soc != 0.0 && soc <= absolutminimumSoC) {
   Serial.println("Very low Battery");
   delay(500);
-  System.sleep(SLEEP_MODE_DEEP, sleepADay);
+  System.sleep( {}, {}, sleepADay);
+  //System.sleep(SLEEP_MODE_DEEP, sleepADay);
   } else {
   String stringAbsolutminimumSoC = String(absolutminimumSoC);
   Serial.println("SoC > " + stringAbsolutminimumSoC + "%");
@@ -498,7 +491,8 @@ void veryLowBattery() {
 void batteryCheck() {
   if (soc != 0.0 && soc <= minimumSoC && !pmic.isPowerGood()) {
   Serial.println("Low Battery");
-  System.sleep(SLEEP_MODE_DEEP, sleepTimeSecs);
+  //System.sleep(SLEEP_MODE_DEEP, sleepTimeSecs);
+  System.sleep( {}, {}, sleepTimeSecs);
   } else {
   String stringMinimumSoC = String(minimumSoC);
   Serial.println("SoC > " + stringMinimumSoC + "%");
@@ -513,8 +507,7 @@ void connectToCellular() {
   delay(500);
   Cellular.connect(); // This command turns on the Cellular Modem and tells it to connect to the cellular network.
 
-  if (!waitFor(Cellular.ready, 180000)) { //If the cellular modem does not successfuly connect to the cellular network in 2 mins then go back to sleep via the sleep command below.
-  //System.sleep(SLEEP_MODE_DEEP, sleepTimeSecs);
+  if (!waitFor(Cellular.ready, 300000)) { //If the cellular modem does not successfuly connect to the cellular network in 2 mins then go back to sleep via the sleep command below.
   System.sleep( {}, {}, sleepTimeSecs);  
   } else {
   Serial.println("Cellular connected...");
@@ -525,9 +518,8 @@ void connectToCellular() {
 void connectToParticle() {
   Particle.connect(); //Connects the device to the Cloud. This will automatically activate the cellular connection and attempt to connect to the Particle cloud if the device is not already connected to the cloud.
 
-  if (!waitFor(Particle.connected, 120000)) { //If the cellular modem does not successfuly connect to the cellular network in 1 mins then go back to sleep via the sleep command below.
+  if (!waitFor(Particle.connected, 300000)) { //If the cellular modem does not successfuly connect to the cellular network in 1 mins then go back to sleep via the sleep command below.
   Serial.printf("WARNING: connection failed...");
-  //System.sleep(SLEEP_MODE_DEEP, sleepTimeSecs);
   System.sleep( {}, {}, sleepTimeSecs);  
   } else {
   Serial.println("Particle connected...");
