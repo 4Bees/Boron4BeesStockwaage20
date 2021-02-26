@@ -11,6 +11,9 @@
 #include "Adafruit_DHT.h"
 #include "cloud4bees.h"
 
+PRODUCT_ID(13905); // replace by your product ID
+PRODUCT_VERSION(1); // increment each time you upload to the console
+
 // Using SEMI_AUTOMATIC mode to get the lowest possible data usage by
 // registering functions and variables BEFORE connecting to the cloud.
 SYSTEM_MODE(SEMI_AUTOMATIC);
@@ -34,15 +37,10 @@ Timer timer(1000, proceedAfter5sec);
 
 HX711 scale(DOUT, CLK);
 
-//String strScalefactor = "";
-//String strOffset = "";
-
 float valueNull = 0;
 float valueKnownWeight = 0;
 float offset = 0;
 float scalefactor = 1;
-
-//float weight = 0;
 
 float floatWeight = 0;
 String stringWeight = "";
@@ -86,23 +84,46 @@ FuelGauge fuel;
 int const num_soc_readings = 5; //number of instantaneous scale readings to calculate the median
 float readings[num_soc_readings]; // create arry to hold readings
 float soc; // Variable to keep track of LiPo state-of-charge (SOC)
-float absolutminimumSoC = 20.0;
-float minimumSoC = 30.0;
 String stringSOC = "";
 
 
 long sleepTimeSecs = 3540;
-long sleepADay = 86400;
-
-PMIC pmic; //Initalize the PMIC class so you can call the Power Management functions below.
 
 // Use primary serial over USB interface for logging output
 SerialLogHandler logHandler;
+
 
 // setup() runs once, when the device is first turned on.
 void setup() {
   // Put initialization like pinMode and begin functions here.
   wait5Seconds();
+  setupSerial();
+  setupPowerConfiguration();
+  setupScale();
+}
+
+void loop() {
+      setupPowerConfiguration();
+      scale.power_up();
+      dht.begin();
+      wait5Seconds();    
+      readSoC();
+      readWeight();
+      readDHT();
+      connectToCellular();
+      connectToParticle();  
+      sendValuesToCloud();
+      System.sleep( {}, {}, sleepTimeSecs);  
+}
+
+
+
+void setupSerial() {
+  Serial.begin(9600);
+  Serial.setTimeout(5000);
+}
+
+void setupPowerConfiguration() {
 
   // Apply a custom power configuration
   SystemPowerConfiguration conf;
@@ -117,38 +138,16 @@ void setup() {
   // returns SYSTEM_ERROR_NONE (0) in case of success
   // Settings are persisted, you normally wouldn't do this on every startup.
 
-  setupSerial();
-  wait5Seconds();
-  setupScale();
-}
-
-void loop() {
-
-      scale.power_up();
-      dht.begin();
-      PMICSetup(); 
-      wait5Seconds();    
-      readSoC();
-      //veryLowBattery();
-      //batteryCheck();
-      readWeight();
-      readDHT();
-
-      connectToCellular();
-      connectToParticle();
-      
-      sendValuesToCloud();
-      System.sleep( {}, {}, sleepTimeSecs); 
-      
-    
 }
 
 
-
-void setupSerial() {
-  Serial.begin(9600);
-  Serial.setTimeout(5000);
+void wait5Seconds() {
+  for(int i=0;i<5;i++) {
+  Serial.println("waiting " + String(5-i) + " seconds before we publish");
+  delay(1000);
+  }
 }
+
 
 void setupScale() {
   
@@ -208,6 +207,7 @@ void setupApiKey(){
     
 }
 
+
 void proceedAfter5sec()
 {
     //Diese Methode wird benötigt, um nach 5 Sekunden mit dem Programm fort zu fahren, wenn keine Eingabe über die serielle Schnittstelle erfolgt.
@@ -223,10 +223,10 @@ void proceedAfter5sec()
       
 }
 
+
 void calibrate() {
 
   scale.set_scale(scalefactor); //Adjust to this calibration factor
-  //valueNull = scale.get_units();
   //Ermittlung des Medians zur Verbesserung der Genauigkeit
   for (int i = 0; i < num_weight_readings; i++) {
     weight_readings[i] = scale.get_units();  // fill the array with instantaneous readings from the scale
@@ -324,36 +324,24 @@ void calibrate() {
   Serial.println("***");
 }
 
-
-void sendValuesToCloud()
-{
-
-          EEPROM.get(api_key_address, api_key_Buffer);
-          Serial.println("API_Key(EEPROM): " + String(api_key_Buffer));
-          delay(1000);
-
-          channel_key = String(api_key_Buffer);
-          Cloud4BeesLibrary::Cloud4Bees cloud4bees (channel_key);
-
-            Serial.println("Weight: " + String(floatWeight));
-            delay(1000);
-
-            //Send Value to cloud4Bees
-            //cloud4bees.setConnectionTimeout(5000);  //Timeoutfunktion (in sendValues()) funktioniert nicht!!!Notwendig?
-            cloud4bees.recordValue(1, String(floatWeight, 2));
-            cloud4bees.recordValue(2, String(temperature, 2));
-            cloud4bees.recordValue(3, String(humidity, 2));
-            cloud4bees.recordValue(4, String(soc, 2));
-            cloud4bees.sendValues();
-            delay(1000);
-            Serial.println("Werte wurden an cloud4Bees gesendet...");
-
+void readSoC() {
+  //fuel.quickStart();
+  delay(500);
+  for (int i = 0; i < num_soc_readings; i++) {
+  readings[i] = fuel.getSoC(); // fill the array with instantaneous readings from the scale
+  Serial.println("SoC: " + String(readings[i]));
+  delay(500);
   }
+  delay(100);
+  soc = median(readings,num_soc_readings); //calculate median 
+  stringSOC = String(soc);
+  Serial.println("SoC_Median: " + String(soc));
+}
+
 
 
 void readWeight() {
   
-  //float calibrationFactor = 0;
   EEPROM.get(scalefactorEepromAdress, scalefactor);
   Serial.println("Scalefactor: " + String(scalefactor));
   scale.set_scale(scalefactor); //Adjust to this calibration factor
@@ -414,90 +402,9 @@ void readDHT() {
 		Serial.println("Failed to read from DHT sensor!");
 		return;
 	}
-
-// Compute heat index
-// Must send in temp in Fahrenheit!
-/*
-	float hi = dht.getHeatIndex();
-	float dp = dht.getDewPoint();
-	float k = dht.getTempKelvin();
-*/
 }
 
 
-void wait5Seconds() {
-  for(int i=0;i<5;i++) {
-  Serial.println("waiting " + String(5-i) + " seconds before we publish");
-  delay(1000);
-  }
-}
-
-void PMICSetup(){
-
-  PMIC power(true);
-  Log.info("Current PMIC settings:");
-  Log.info("VIN Vmin: %u", power.getInputVoltageLimit());
-  Log.info("VIN Imax: %u", power.getInputCurrentLimit());
-  Log.info("Ichg: %u", power.getChargeCurrentValue());
-  Log.info("Vchg: %u", power.getChargeVoltageValue());
-
-  int powerSource = System.powerSource();
-  int batteryState = System.batteryState();
-  float batterySoc = System.batteryCharge();
-
-  constexpr char const* batteryStates[] = {
-  "unknown", "not charging", "charging",
-  "charged", "discharging", "fault", "disconnected"
-  };
-  constexpr char const* powerSources[] = {
-  "unknown", "vin", "usb host", "usb adapter",
-  "usb otg", "battery"
-  };
-
-  Log.info("Power source: %s", powerSources[std::max(0, powerSource)]);
-  Log.info("Battery state: %s", batteryStates[std::max(0, batteryState)]);
-  Log.info("Battery charge: %f", batterySoc);
-
-}
-
-
-void readSoC() {
-  //fuel.quickStart();
-  delay(500);
-  for (int i = 0; i < num_soc_readings; i++) {
-  readings[i] = fuel.getSoC(); // fill the array with instantaneous readings from the scale
-  Serial.println("SoC: " + String(readings[i]));
-  delay(500);
-  }
-  delay(100);
-  soc = median(readings,num_soc_readings); //calculate median 
-  //soc = fuel.getSoC();
-  stringSOC = String(soc);
-  Serial.println("SoC_Median: " + String(soc));
-}
-
-void veryLowBattery() {
-  if (soc != 0.0 && soc <= absolutminimumSoC) {
-  Serial.println("Very low Battery");
-  delay(500);
-  System.sleep( {}, {}, sleepADay);
-  //System.sleep(SLEEP_MODE_DEEP, sleepADay);
-  } else {
-  String stringAbsolutminimumSoC = String(absolutminimumSoC);
-  Serial.println("SoC > " + stringAbsolutminimumSoC + "%");
-  }
-}
-
-void batteryCheck() {
-  if (soc != 0.0 && soc <= minimumSoC && !pmic.isPowerGood()) {
-  Serial.println("Low Battery");
-  //System.sleep(SLEEP_MODE_DEEP, sleepTimeSecs);
-  System.sleep( {}, {}, sleepTimeSecs);
-  } else {
-  String stringMinimumSoC = String(minimumSoC);
-  Serial.println("SoC > " + stringMinimumSoC + "%");
-  }
-}
 
 void connectToCellular() {
   Cellular.off(); //Turning off the Cellular module will force it to go through a full re-connect to the Cellular network the next time it is turned on.
@@ -526,6 +433,29 @@ void connectToParticle() {
   }
 }
 
+void sendValuesToCloud()
+{
+
+          EEPROM.get(api_key_address, api_key_Buffer);
+          Serial.println("API_Key(EEPROM): " + String(api_key_Buffer));
+          delay(1000);
+
+          channel_key = String(api_key_Buffer);
+          Cloud4BeesLibrary::Cloud4Bees cloud4bees (channel_key);
+
+            Serial.println("Weight: " + String(floatWeight));
+            delay(1000);
+
+            //Send Value to cloud4Bees
+            //cloud4bees.setConnectionTimeout(5000);  //Timeoutfunktion (in sendValues()) funktioniert nicht!!!Notwendig?
+            cloud4bees.recordValue(1, String(floatWeight, 2));
+            cloud4bees.recordValue(2, String(temperature, 2));
+            cloud4bees.recordValue(3, String(humidity, 2));
+            cloud4bees.recordValue(4, String(soc, 2));
+            cloud4bees.sendValues();
+            delay(1000);
+            Serial.println("Werte wurden an cloud4Bees gesendet...");
+  }
 
 
 //Following functions are based on "https://github.com/dndubins/QuickStats", by David Dubins  
