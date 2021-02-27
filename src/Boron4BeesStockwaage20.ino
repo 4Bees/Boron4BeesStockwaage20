@@ -28,7 +28,7 @@ String channel_key = "";
 
 static int count = 0;
 
-static int keepAlive = 300; // Wird nur für 3rd Party SIM benötigt!
+static int keepAlive = 120; // Wird nur für 3rd Party SIM benötigt!
 
 boolean waitForSetup = 0;
 Timer timer(1000, proceedAfter5sec);
@@ -89,7 +89,7 @@ float soc; // Variable to keep track of LiPo state-of-charge (SOC)
 String stringSOC = "";
 
 
-long sleepTimeSecs = 3540;
+long sleepTimeSecs = 3530;
 
 // Use primary serial over USB interface for logging output
 SerialLogHandler logHandler;
@@ -417,7 +417,7 @@ void connectToCellular() {
   delay(500);
   Cellular.connect(); // This command turns on the Cellular Modem and tells it to connect to the cellular network.
 
-  if (!waitFor(Cellular.ready, 300000)) { //If the cellular modem does not successfuly connect to the cellular network in 2 mins then go back to sleep via the sleep command below.
+  if (!waitFor(Cellular.ready, 180000)) { //If the cellular modem does not successfuly connect to the cellular network in 2 mins then go back to sleep via the sleep command below.
   System.sleep( {}, {}, sleepTimeSecs);  
   } else {
   Serial.println("Cellular connected...");
@@ -428,9 +428,10 @@ void connectToCellular() {
 void connectToParticle() {
   Particle.connect(); //Connects the device to the Cloud. This will automatically activate the cellular connection and attempt to connect to the Particle cloud if the device is not already connected to the cloud.
 
-  if (!waitFor(Particle.connected, 300000)) { //If the cellular modem does not successfuly connect to the cellular network in 1 mins then go back to sleep via the sleep command below.
-  Serial.printf("WARNING: connection failed...");
-  System.sleep( {}, {}, sleepTimeSecs);  
+  if (!waitFor(Particle.connected, 120000)) { //If the cellular modem does not successfuly connect to the cellular network in 1 mins then go back to sleep via the sleep command below.
+  Serial.printf("WARNING: Connection to Particle failed...");
+  System.reset(RESET_NO_WAIT);
+  //System.sleep( {}, {}, sleepTimeSecs);  
   } else {
   Serial.println("Particle connected...");
   }
