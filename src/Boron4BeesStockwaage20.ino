@@ -28,6 +28,8 @@ String channel_key = "";
 
 static int count = 0;
 
+static int keepAlive = 300; // Wird nur für 3rd Party SIM benötigt!
+
 boolean waitForSetup = 0;
 Timer timer(1000, proceedAfter5sec);
 
@@ -72,11 +74,11 @@ DHT dht(DHTPIN, DHTTYPE);
 
 
 float temperature = 0;
-int const num_temperature_readings = 10;
+int const num_temperature_readings = 11;
 float temperature_readings[num_temperature_readings];
 
 float humidity = 0;
-int const num_humidity_readings = 10;
+int const num_humidity_readings = 11;
 float humidity_readings[num_humidity_readings];
 
 
@@ -96,6 +98,7 @@ SerialLogHandler logHandler;
 // setup() runs once, when the device is first turned on.
 void setup() {
   // Put initialization like pinMode and begin functions here.
+  Particle.keepAlive(keepAlive);  // Wird nur für 3rd Party SIM benötigt!
   wait5Seconds();
   setupSerial();
   setupPowerConfiguration();
@@ -120,7 +123,7 @@ void loop() {
 
 void setupSerial() {
   Serial.begin(9600);
-  Serial.setTimeout(5000);
+  Serial.setTimeout(5000); //Timout für die Tastatureingabe - wartet 5 Sekunden bis die Eingabe abgebrochen wird.
 }
 
 void setupPowerConfiguration() {
@@ -384,7 +387,7 @@ void readDHT() {
   delay(1000);
   
   temperature = median(temperature_readings,num_temperature_readings);  //calculate median 
-  Serial.println("Temperature: " + String(temperature));
+  Serial.println("Temperature_Median: " + String(temperature));
 
 
   for (int i = 0; i < num_humidity_readings; i++) {
@@ -395,7 +398,7 @@ void readDHT() {
   delay(1000);
   
   humidity = median(humidity_readings,num_humidity_readings);  //calculate median 
-  Serial.println("Humidity: " + String(humidity));
+  Serial.println("Humidity_Median: " + String(humidity));
   
 // Check if any reads failed and exit early (to try again).
 	if (isnan(humidity) || isnan(temperature)) {
